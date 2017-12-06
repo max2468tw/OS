@@ -15,6 +15,13 @@ using namespace std;
 #define MYGREEN 1
 #define MYBLUE	0
 
+typedef struct {
+    int imgWidth;
+    int imgHeight;
+	unsigned char *pic_in, *pic_grey, *pic_blur, *pic_final;
+	int i;
+} info;
+
 int FILTER_SIZE;
 int FILTER_SCALE;
 int *filter_G;
@@ -69,6 +76,9 @@ unsigned char GaussianFilter(int w, int h, int imgWidth, int imgHeight, unsigned
 }
 
 void *function( void *ptr );
+void *grey( void *ptr );
+void *Gaussian( void *ptr );
+void *extend( void *ptr );
 
 int main()
 {
@@ -107,29 +117,59 @@ void *function( void *ptr )
 		pic_blur = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
 		pic_final = (unsigned char*)malloc(3 * imgWidth*imgHeight*sizeof(unsigned char));
 		
-		//convert RGB image to grey image
+		/*//convert RGB image to grey image
 		for (int j = 0; j<imgHeight; j++) {
 			for (int i = 0; i<imgWidth; i++){
 				pic_grey[j*imgWidth + i] = RGB2grey(i, j, imgWidth, pic_in);
 			}
+		}*/
+		info in[4];
+		pthread_t th1[4];
+		for (int i = 0; i<4; i++){
+			in[i].imgWidth = imgWidth;
+			in[i].imgHeight = imgHeight;
+			in[i].pic_in = pic_in;
+			in[i].pic_grey = pic_grey;
+			in[i].pic_blur = pic_blur;
+			in[i].pic_final = pic_final;
+			in[i].i = i;
+			pthread_create( &th1[i], NULL, grey, &in[i]);
 		}
-
+		for (int i = 0; i<4; i++){
+			pthread_join( th1[i], NULL);
+		}
+		
+		
 		//apply the Gaussian filter to the image
-		for (int j = 0; j<imgHeight; j++) {
+		/*for (int j = 0; j<imgHeight; j++) {
 			for (int i = 0; i<imgWidth; i++){
 				pic_blur[j*imgWidth + i] = GaussianFilter(i, j, imgWidth, imgHeight, pic_grey);
 			}
+		}*/
+		pthread_t th2[4];
+		for (int i = 0; i<4; i++){
+			pthread_create( &th2[i], NULL, Gaussian, &in[i]);
 		}
-
-		//extend the size form WxHx1 to WxHx3
+		for (int i = 0; i<4; i++){
+			pthread_join( th2[i], NULL);
+		}
+		
+		/*//extend the size form WxHx1 to WxHx3
 		for (int j = 0; j<imgHeight; j++) {
 			for (int i = 0; i<imgWidth; i++){
 				pic_final[3 * (j*imgWidth + i) + MYRED] = pic_blur[j*imgWidth + i];
 				pic_final[3 * (j*imgWidth + i) + MYGREEN] = pic_blur[j*imgWidth + i];
 				pic_final[3 * (j*imgWidth + i) + MYBLUE] = pic_blur[j*imgWidth + i];
 			}
+		}*/
+		pthread_t th3[4];
+		for (int i = 0; i<4; i++){
+			pthread_create( &th3[i], NULL, extend, &in[i]);
 		}
-
+		for (int i = 0; i<4; i++){
+			pthread_join( th3[i], NULL);
+		}
+		
 		// write output BMP file
 		bmpReader->WriteBMP(outputBlur_name[*((int*)ptr)], imgWidth, imgHeight, pic_final);
 
@@ -138,4 +178,51 @@ void *function( void *ptr )
 		free(pic_grey);
 		free(pic_blur);
 		free(pic_final);
+}
+
+void *grey( void *ptr )
+{
+	int imgHeight = ((info *)ptr)->imgHeight;
+	int imgWidth = ((info *)ptr)->imgWidth;
+	int top = imgWidth/4*((((info *)ptr)->i)+1);
+	int button = imgWidth/4*(((info *)ptr)->i);
+	unsigned char *pic_in = ((info *)ptr)->pic_in;
+	unsigned char *pic_grey = ((info *)ptr)->pic_grey;
+	for (int j = 0; j<imgHeight; j++) {
+		for (int i = button; i<top; i++){
+			pic_grey[j*imgWidth + i] = RGB2grey(i, j, imgWidth, pic_in);
+		}		
+	}
+}
+
+void *Gaussian( void *ptr )
+{
+	int imgHeight = ((info *)ptr)->imgHeight;
+	int imgWidth = ((info *)ptr)->imgWidth;
+	int top = imgWidth/4*((((info *)ptr)->i)+1);
+	int button = imgWidth/4*(((info *)ptr)->i);
+	unsigned char *pic_grey = ((info *)ptr)->pic_grey;
+	unsigned char *pic_blur = ((info *)ptr)->pic_blur;
+	for (int j = 0; j<imgHeight; j++) {
+		for (int i = button; i<top; i++){
+			pic_blur[j*imgWidth + i] = GaussianFilter(i, j, imgWidth, imgHeight, pic_grey);
+		}
+	}
+}
+
+void *extend( void *ptr )
+{
+	int imgHeight = ((info *)ptr)->imgHeight;
+	int imgWidth = ((info *)ptr)->imgWidth;
+	int top = imgWidth/4*((((info *)ptr)->i)+1);
+	int button = imgWidth/4*(((info *)ptr)->i);
+	unsigned char *pic_blur = ((info *)ptr)->pic_blur;
+	unsigned char *pic_final = ((info *)ptr)->pic_final;
+	for (int j = 0; j<imgHeight; j++) {
+		for (int i = button; i<top; i++){
+			pic_final[3 * (j*imgWidth + i) + MYRED] = pic_blur[j*imgWidth + i];
+			pic_final[3 * (j*imgWidth + i) + MYGREEN] = pic_blur[j*imgWidth + i];
+			pic_final[3 * (j*imgWidth + i) + MYBLUE] = pic_blur[j*imgWidth + i];
+		}
+	}
 }
