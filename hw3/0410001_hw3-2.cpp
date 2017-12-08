@@ -20,6 +20,8 @@ typedef struct {
     int imgHeight;
 	unsigned char *pic_in, *pic_grey, *pic_Gx, *pic_Gy, *pic_blur, *pic_final;
 	int i;
+	int j;
+	sem_t* sem;
 } info;
 
 int FILTER_SIZE;
@@ -146,88 +148,77 @@ void *function( void *ptr )
 		pic_blur = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
 		pic_final = (unsigned char*)malloc(3 * imgWidth*imgHeight*sizeof(unsigned char));
 		
-		/*//convert RGB image to grey image
-		for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_grey[j*imgWidth + i] = RGB2grey(i, j);
+		sem_t sem[16];
+		
+		info in[16];
+		pthread_t th1[16];
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				sem_init(&sem[j*4+i], 0, 1);
+				in[j*4+i].imgWidth = imgWidth;
+				in[j*4+i].imgHeight = imgHeight;
+				in[j*4+i].pic_in = pic_in;
+				in[j*4+i].pic_grey = pic_grey;
+				in[j*4+i].pic_Gx = pic_Gx;
+				in[j*4+i].pic_Gy = pic_Gy;
+				in[j*4+i].pic_blur = pic_blur;
+				in[j*4+i].pic_final = pic_final;
+				in[j*4+i].i = i;
+				in[j*4+i].j = j;
+				in[j*4+i].sem = &sem[j*4+i];
+				pthread_create( &th1[j*4+i], NULL, grey, &in[j*4+i]);
 			}
-		}*/
-		info in[4];
-		pthread_t th1[4];
-		for (int i = 0; i<4; i++){
-			in[i].imgWidth = imgWidth;
-			in[i].imgHeight = imgHeight;
-			in[i].pic_in = pic_in;
-			in[i].pic_grey = pic_grey;
-			in[i].pic_Gx = pic_Gx;
-			in[i].pic_Gy = pic_Gy;
-			in[i].pic_blur = pic_blur;
-			in[i].pic_final = pic_final;
-			in[i].i = i;
-			pthread_create( &th1[i], NULL, grey, &in[i]);
 		}
-		for (int i = 0; i<4; i++){
-			pthread_join( th1[i], NULL);
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_join( th1[j*4+i], NULL);
+			}
+		}
+		pthread_t th2[16];
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_create( &th2[j*4+i], NULL, Gx, &in[j*4+i]);
+			}
+		}
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_join( th2[j*4+i], NULL);
+			}
+		}
+
+		pthread_t th3[16];
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_create( &th3[j*4+i], NULL, Gy, &in[j*4+i]);
+			}
+		}
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_join( th3[j*4+i], NULL);
+			}
+		}
+		pthread_t th4[16];
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_create( &th4[j*4+i], NULL, calculate, &in[j*4+i]);
+			}
+		}
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_join( th4[j*4+i], NULL);
+			}
 		}
 		
-		/*//apply the Gx filter to the image
-		for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_Gx[j*imgWidth + i] = GxFilter(i, j);
+		pthread_t th5[16];
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_create( &th5[j*4+i], NULL, extend, &in[j*4+i]);
 			}
-		}*/
-		
-		/*//apply the Gy filter to the image
-		for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_Gy[j*imgWidth + i] = GyFilter(i, j);
+		}
+		for (int j = 0; j<4; j++){
+			for (int i = 0; i<4; i++){
+				pthread_join( th5[j*4+i], NULL);
 			}
-		}*/
-		pthread_t th2[4];
-		pthread_t th3[4];
-		for (int i = 0; i<4; i++){
-			pthread_create( &th2[i], NULL, Gx, &in[i]);
-			pthread_create( &th3[i], NULL, Gy, &in[i]);
-		}
-		for (int i = 0; i<4; i++){
-			pthread_join( th2[i], NULL);
-			pthread_join( th3[i], NULL);
-		}
-		
-		/*pthread_t th3[4];
-		for (int i = 0; i<4; i++){
-			pthread_create( &th3[i], NULL, Gy, &in[i]);
-		}
-		for (int i = 0; i<4; i++){
-			pthread_join( th3[i], NULL);
-		}*/
-		/*for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_blur[j*imgWidth + i] = sqrt(pic_Gx[j*imgWidth + i]*pic_Gx[j*imgWidth + i] + pic_Gy[j*imgWidth + i]*pic_Gy[j*imgWidth + i]);
-			}
-		}*/
-		pthread_t th4[4];
-		for (int i = 0; i<4; i++){
-			pthread_create( &th4[i], NULL, calculate, &in[i]);
-		}
-		for (int i = 0; i<4; i++){
-			pthread_join( th4[i], NULL);
-		}
-		
-		//extend the size form WxHx1 to WxHx3
-		/*for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_final[3 * (j*imgWidth + i) + MYRED] = pic_blur[j*imgWidth + i];
-				pic_final[3 * (j*imgWidth + i) + MYGREEN] = pic_blur[j*imgWidth + i];
-				pic_final[3 * (j*imgWidth + i) + MYBLUE] = pic_blur[j*imgWidth + i];
-			}
-		}*/
-		pthread_t th5[4];
-		for (int i = 0; i<4; i++){
-			pthread_create( &th5[i], NULL, extend, &in[i]);
-		}
-		for (int i = 0; i<4; i++){
-			pthread_join( th5[i], NULL);
 		}
 		// write output BMP file
 		bmpReader->WriteBMP(outputSobel_name[k], imgWidth, imgHeight, pic_final);
@@ -245,12 +236,14 @@ void *grey( void *ptr )
 {
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
-	int top = imgWidth/4*((((info *)ptr)->i)+1);
-	int button = imgWidth/4*(((info *)ptr)->i);
+	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
+	int h_button = imgHeight/4*(((info *)ptr)->j);
+	int w_top = imgWidth/4*((((info *)ptr)->i)+1);
+	int w_button = imgWidth/4*(((info *)ptr)->i);
 	unsigned char *pic_in = ((info *)ptr)->pic_in;
 	unsigned char *pic_grey = ((info *)ptr)->pic_grey;
-	for (int j = 0; j<imgHeight; j++) {
-		for (int i = button; i<top; i++){
+	for (int j = h_button; j<h_top; j++) {
+		for (int i = w_button; i<w_top; i++){
 			pic_grey[j*imgWidth + i] = RGB2grey(i, j, imgWidth, pic_in);
 		}		
 	}
@@ -260,12 +253,14 @@ void *Gx( void *ptr )
 {
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
-	int top = imgWidth/4*((((info *)ptr)->i)+1);
-	int button = imgWidth/4*(((info *)ptr)->i);
+	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
+	int h_button = imgHeight/4*(((info *)ptr)->j);
+	int w_top = imgWidth/4*((((info *)ptr)->i)+1);
+	int w_button = imgWidth/4*(((info *)ptr)->i);
 	unsigned char *pic_grey = ((info *)ptr)->pic_grey;
 	unsigned char *pic_Gx = ((info *)ptr)->pic_Gx;
-	for (int j = 0; j<imgHeight; j++) {
-		for (int i = button; i<top; i++){
+	for (int j = h_button; j<h_top; j++) {
+		for (int i = w_button; i<w_top; i++){
 			pic_Gx[j*imgWidth + i] = GxFilter(i, j, imgWidth, imgHeight, pic_grey);
 		}
 	}
@@ -275,12 +270,14 @@ void *Gy( void *ptr )
 {
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
-	int top = imgWidth/4*((((info *)ptr)->i)+1);
-	int button = imgWidth/4*(((info *)ptr)->i);
+	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
+	int h_button = imgHeight/4*(((info *)ptr)->j);
+	int w_top = imgWidth/4*((((info *)ptr)->i)+1);
+	int w_button = imgWidth/4*(((info *)ptr)->i);
 	unsigned char *pic_grey = ((info *)ptr)->pic_grey;
 	unsigned char *pic_Gy = ((info *)ptr)->pic_Gy;
-	for (int j = 0; j<imgHeight; j++) {
-		for (int i = button; i<top; i++){
+	for (int j = h_button; j<h_top; j++) {
+		for (int i = w_button; i<w_top; i++){
 			pic_Gy[j*imgWidth + i] = GyFilter(i, j, imgWidth, imgHeight, pic_grey);
 		}
 	}
@@ -288,30 +285,39 @@ void *Gy( void *ptr )
 
 void *calculate( void *ptr )
 {
+	sem_t* sem = ((info *)ptr)->sem;
+	sem_wait (sem);
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
-	int top = imgWidth/4*((((info *)ptr)->i)+1);
-	int button = imgWidth/4*(((info *)ptr)->i);
+	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
+	int h_button = imgHeight/4*(((info *)ptr)->j);
+	int w_top = imgWidth/4*((((info *)ptr)->i)+1);
+	int w_button = imgWidth/4*(((info *)ptr)->i);
 	unsigned char *pic_Gx = ((info *)ptr)->pic_Gx;
 	unsigned char *pic_Gy = ((info *)ptr)->pic_Gy;
 	unsigned char *pic_blur = ((info *)ptr)->pic_blur;
-	for (int j = 0; j<imgHeight; j++) {
-		for (int i = button; i<top; i++){
+	for (int j = h_button; j<h_top; j++) {
+		for (int i = w_button; i<w_top; i++){
 			pic_blur[j*imgWidth + i] = sqrt(pic_Gx[j*imgWidth + i]*pic_Gx[j*imgWidth + i] + pic_Gy[j*imgWidth + i]*pic_Gy[j*imgWidth + i]);
 		}
 	}
+	sem_post (sem);
 }
 
 void *extend( void *ptr )
 {
+	sem_t* sem = ((info *)ptr)->sem;
+	sem_wait (sem);
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
-	int top = imgWidth/4*((((info *)ptr)->i)+1);
-	int button = imgWidth/4*(((info *)ptr)->i);
+	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
+	int h_button = imgHeight/4*(((info *)ptr)->j);
+	int w_top = imgWidth/4*((((info *)ptr)->i)+1);
+	int w_button = imgWidth/4*(((info *)ptr)->i);
 	unsigned char *pic_blur = ((info *)ptr)->pic_blur;
 	unsigned char *pic_final = ((info *)ptr)->pic_final;
-	for (int j = 0; j<imgHeight; j++) {
-		for (int i = button; i<top; i++){
+	for (int j = h_button; j<h_top; j++) {
+		for (int i = w_button; i<w_top; i++){
 			pic_final[3 * (j*imgWidth + i) + MYRED] = pic_blur[j*imgWidth + i];
 			pic_final[3 * (j*imgWidth + i) + MYGREEN] = pic_blur[j*imgWidth + i];
 			pic_final[3 * (j*imgWidth + i) + MYBLUE] = pic_blur[j*imgWidth + i];

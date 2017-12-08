@@ -21,6 +21,7 @@ typedef struct {
 	unsigned char *pic_in, *pic_grey, *pic_blur, *pic_final;
 	int i;
 	int j;
+	pthread_mutex_t* mutex;
 } info;
 
 int FILTER_SIZE;
@@ -77,9 +78,6 @@ unsigned char GaussianFilter(int w, int h, int imgWidth, int imgHeight, unsigned
 }
 
 void *function( void *ptr );
-/*void *pic_malloc1( void *ptr );
-void *pic_malloc2( void *ptr );
-void *pic_malloc3( void *ptr );*/
 void *grey( void *ptr );
 void *Gaussian( void *ptr );
 void *extend( void *ptr );
@@ -111,39 +109,24 @@ int main()
 
 void *function( void *ptr )
 {
+		int k = *((int*)ptr);
 		int imgWidth, imgHeight;
 		unsigned char *pic_in, *pic_grey, *pic_blur, *pic_final;
 		// read input BMP file
 		BmpReader* bmpReader = new BmpReader();
-		pic_in = bmpReader->ReadBMP(inputfile_name[*((int*)ptr)], &imgWidth, &imgHeight);
+		pic_in = bmpReader->ReadBMP(inputfile_name[k], &imgWidth, &imgHeight);
 		// allocate space for output image
 		pic_grey = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
 		pic_blur = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
 		pic_final = (unsigned char*)malloc(3 * imgWidth*imgHeight*sizeof(unsigned char));
 		
-		/*info a;
-		a.imgWidth = imgWidth;
-		a.imgHeight = imgHeight;
-		a.pic_grey = pic_grey;
-		a.pic_blur = pic_blur;
-		a.pic_final = pic_final;
-		pthread_t th0[3];
-		pthread_create( &th0[0], NULL, pic_malloc1, &a);
-		pthread_create( &th0[1], NULL, pic_malloc2, &a);
-		pthread_create( &th0[2], NULL, pic_malloc3, &a);
-		for (int i = 0; i<3; i++){
-			pthread_join( th0[i], NULL);
-		}*/
-		/*//convert RGB image to grey image
-		for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_grey[j*imgWidth + i] = RGB2grey(i, j, imgWidth, pic_in);
-			}
-		}*/
+		pthread_mutex_t mutex[16];
+		
 		info in[16];
 		pthread_t th1[16];
 		for (int j = 0; j<4; j++){
 			for (int i = 0; i<4; i++){
+				mutex[j*4+i] = PTHREAD_MUTEX_INITIALIZER;
 				in[j*4+i].imgWidth = imgWidth;
 				in[j*4+i].imgHeight = imgHeight;
 				in[j*4+i].pic_in = pic_in;
@@ -152,6 +135,7 @@ void *function( void *ptr )
 				in[j*4+i].pic_final = pic_final;
 				in[j*4+i].i = i;
 				in[j*4+i].j = j;
+				in[j*4+i].mutex = &mutex[j*4+i];
 				pthread_create( &th1[j*4+i], NULL, grey, &in[j*4+i]);
 			}
 		}
@@ -161,13 +145,6 @@ void *function( void *ptr )
 			}
 		}
 		
-		
-		//apply the Gaussian filter to the image
-		/*for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_blur[j*imgWidth + i] = GaussianFilter(i, j, imgWidth, imgHeight, pic_grey);
-			}
-		}*/
 		pthread_t th2[16];
 		for (int j = 0; j<4; j++){
 			for (int i = 0; i<4; i++){
@@ -179,14 +156,7 @@ void *function( void *ptr )
 				pthread_join( th2[j*4+i], NULL);
 			}
 		}
-		/*//extend the size form WxHx1 to WxHx3
-		for (int j = 0; j<imgHeight; j++) {
-			for (int i = 0; i<imgWidth; i++){
-				pic_final[3 * (j*imgWidth + i) + MYRED] = pic_blur[j*imgWidth + i];
-				pic_final[3 * (j*imgWidth + i) + MYGREEN] = pic_blur[j*imgWidth + i];
-				pic_final[3 * (j*imgWidth + i) + MYBLUE] = pic_blur[j*imgWidth + i];
-			}
-		}*/
+
 		pthread_t th3[16];
 		for (int j = 0; j<4; j++){
 			for (int i = 0; i<4; i++){
@@ -200,7 +170,7 @@ void *function( void *ptr )
 		}
 		
 		// write output BMP file
-		bmpReader->WriteBMP(outputBlur_name[*((int*)ptr)], imgWidth, imgHeight, pic_final);
+		bmpReader->WriteBMP(outputBlur_name[k], imgWidth, imgHeight, pic_final);
 
 		//free memory space
 		free(pic_in);
@@ -209,30 +179,10 @@ void *function( void *ptr )
 		free(pic_final);
 }
 
-/*void *pic_malloc1( void *ptr )
-{
-	int imgHeight = ((info *)ptr)->imgHeight;
-	int imgWidth = ((info *)ptr)->imgWidth;
-	((info *)ptr)->pic_grey = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
-}
-
-void *pic_malloc2( void *ptr )
-{
-	int imgHeight = ((info *)ptr)->imgHeight;
-	int imgWidth = ((info *)ptr)->imgWidth;
-	((info *)ptr)->pic_blur = (unsigned char*)malloc(imgWidth*imgHeight*sizeof(unsigned char));
-
-}
-
-void *pic_malloc3( void *ptr )
-{
-	int imgHeight = ((info *)ptr)->imgHeight;
-	int imgWidth = ((info *)ptr)->imgWidth;
-	((info *)ptr)->pic_final = (unsigned char*)malloc(3*imgWidth*imgHeight*sizeof(unsigned char));
-}*/
-
 void *grey( void *ptr )
 {
+	pthread_mutex_t* mutex = ((info *)ptr)->mutex;
+	pthread_mutex_lock( mutex );
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
 	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
@@ -246,10 +196,13 @@ void *grey( void *ptr )
 			pic_grey[j*imgWidth + i] = RGB2grey(i, j, imgWidth, pic_in);
 		}		
 	}
+	pthread_mutex_unlock( mutex );
 }
 
 void *Gaussian( void *ptr )
 {
+	pthread_mutex_t* mutex = ((info *)ptr)->mutex;
+	pthread_mutex_lock( mutex );
 	int imgHeight = ((info *)ptr)->imgHeight;
 	int imgWidth = ((info *)ptr)->imgWidth;
 	int h_top = imgHeight/4*((((info *)ptr)->j)+1);
@@ -263,6 +216,7 @@ void *Gaussian( void *ptr )
 			pic_blur[j*imgWidth + i] = GaussianFilter(i, j, imgWidth, imgHeight, pic_grey);
 		}
 	}
+	pthread_mutex_unlock( mutex );
 }
 
 void *extend( void *ptr )
