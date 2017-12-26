@@ -162,6 +162,8 @@ int main()
 
 		//free memory space
 		free(pic_in);
+		free(pic_Gx);
+		free(pic_Gy);
 		free(pic_grey);
 		free(pic_blur);
 		free(pic_final);
