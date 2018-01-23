@@ -28,7 +28,7 @@ int NumOfTLBEntries = 0;   // counter to track the number of entries in the TLB
 // input file and backing store
 FILE    *address_file;
 FILE    *backing_store;
-
+FILE 	*pFile;
 // how we store reads from input file
 char    address[BUFFER_SIZE];
 int     logical_address;
@@ -91,6 +91,7 @@ void getPage(int logical_address){
     // output the virtual address, physical address and value of the signed char to the console
     //printf("Virtual address: %d Physical address: %d Value: %d\n", logical_address, (frameNumber << 8) | offset, value);
     printf("%d\t%d\n", (frameNumber << 8) | offset, value);
+	fprintf(pFile, "%d %d\n", (frameNumber << 8) | offset, value);
 }
 
 // function to insert a page number and frame number into the TLB with a FIFO replacement
@@ -185,6 +186,13 @@ int main(int argc, char *argv[])
 
 	//initialize the PageTable and TLB
     init();
+	
+    pFile = fopen( "results.txt","w" );
+
+    if (pFile == NULL) {
+        fprintf(stderr, "Error opening results.txt\n");
+        return -1;
+    }
 
     //int numberOfTranslatedAddresses = 0;
     // read through the input file and output each logical address
@@ -201,15 +209,17 @@ int main(int argc, char *argv[])
     //double pfRate = pageFaults / (double)numberOfTranslatedAddresses;
     //double TLBRate = TLBHits / (double)numberOfTranslatedAddresses;
 
-    printf("TLB hits = %d\n", TLBHits);
+    printf("TLB hits: %d\n", TLBHits);
+	fprintf(pFile, "TLB hits: %d\n", TLBHits);
     //printf("TLB Hit Rate = %.3f\n", TLBRate);
-    printf("Page faults = %d\n", pageFaults);
+    printf("Page faults: %d\n", pageFaults);
+	fprintf(pFile, "Page faults: %d\n", pageFaults);
     //printf("Page Fault Rate = %.3f\n",pfRate);
 
 
     // close the input file and backing store
     fclose(address_file);
     fclose(backing_store);
-
+	fclose(pFile);
     return 0;
 }
